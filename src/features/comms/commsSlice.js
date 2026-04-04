@@ -16,7 +16,7 @@ export const commsSlice = createSlice({
     addMessage: (state, action) => {
       state.messages.push(action.payload);
     },
-    //function to update message status (Sent -> Hopping -> Delivered) later!
+    //function to update message status (Sent -> Hopping -> Delivered) later
     updateMessageStatus: (state, action) => {
       const msg = state.messages.find(m => m.id === action.payload.id);
       if (msg) msg.status = action.payload.status;
