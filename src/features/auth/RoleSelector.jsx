@@ -28,7 +28,9 @@ export default function RoleSelector() {
     dispatch(setRole(selected));
     
     // START THE MESH NETWORK! 
-    initMeshNetwork('http://10.200.121.47:3001', { role: selected });
+    // This automatically grabs whatever IP or localhost you are currently using!
+    const serverUrl = `http://${window.location.hostname}:3001`;
+    initMeshNetwork(serverUrl, { role: selected });
     
     // START THE RADAR PING!
     setTimeout(() => {
