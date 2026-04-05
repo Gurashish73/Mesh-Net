@@ -88,6 +88,12 @@ const weatherSlice = createSlice({
     // Called when receiving weather from mesh
     receiveWeatherFromMesh: (state, action) => {
       const { forecastData, fromNode } = action.payload;
+
+      // Preserve direct API weather if already loaded locally.
+      if (state.source === 'local' && state.forecastData && state.forecastData.list?.length > 0) {
+        return;
+      }
+
       state.forecastData = forecastData;
       state.source = 'mesh';
       state.lastFetchTime = Date.now();
