@@ -2,6 +2,7 @@ import { io } from 'socket.io-client';
 import { store } from '../app/store';
 import { addMessage } from '../features/comms/commsSlice';
 import { setNearbyNodes } from '../features/radar/radarSlice';
+import { receiveWeatherFromMesh, updateMeshWeatherProviders } from '../features/weather/weatherSlice';
 import { triggerSosVibration } from '../utils/vibrate';
 import { calculateDistance } from '../utils/haversine'; 
 
@@ -159,6 +160,58 @@ export const handleIncomingMeshPacket = (rawJsonString) => {
         }
         break;
       }
+
+      case 'WEATHER_SHARE': {
+        // Receive weather data from a node with internet
+        const { forecastData, fromNode, hasInternet } = packet.payload;
+        
+        if (forecastData) {
+          // Dispatch received weather to Redux
+          store.dispatch(receiveWeatherFromMesh({ forecastData, fromNode }));
+          console.log(`🌦️ WEATHER SHARE: Received forecast from ${fromNode}`);
+          
+          // Update cache locally so we have it for future offline use
+          localStorage.setItem('weatherForecastData', JSON.stringify(forecastData));
+          localStorage.setItem('weatherCacheTime', Date.now().toString());
+          localStorage.setItem('weatherSourceNode', fromNode);
+        }
+
+        // --- WEATHER MULTI-HOP! ---
+        if (packet.payload.ttl > 1 && packet.payload.originalSender !== myName) {
+            const hoppedPacket = {
+              ...packet,
+              payload: { ...packet.payload, ttl: packet.payload.ttl - 1 }
+            };
+            console.log(`🦘 WEATHER HOP ACTIVATED! Proxying weather from ${packet.payload.originalSender}`);
+            setTimeout(() => broadcastToMesh(hoppedPacket), 200);
+        }
+        break;
+      }
+
+      case 'WEATHER_REQUEST': {
+        // A node is asking for weather data
+        const { requesterId, lat, lng } = packet.payload;
+        const currentStore = store.getState();
+        const weatherData = currentStore.weather.forecastData;
+        
+        if (weatherData && requesterId !== myName) {
+          // Send weather back to the requester
+          broadcastToMesh({
+            type: 'WEATHER_SHARE',
+            payload: {
+              packetId: `weather_${myName}_${Date.now()}`,
+              originalSender: myName,
+              fromNode: myName,
+              forecastData: weatherData,
+              hasInternet: true,
+              ttl: 5,
+              targetNode: requesterId
+            }
+          });
+          console.log(`🌦️ WEATHER REQUEST: Sending forecast to ${requesterId}`);
+        }
+        break;
+      }
     }
   } catch (error) {
     console.error("Failed to parse mesh packet:", error);
@@ -264,6 +317,45 @@ export const broadcastToMesh = (packetObject) => {
   return sentCount > 0; 
 };
 
+// Broadcast cached weather data to all nearby nodes (multi-hop)
+export const broadcastWeatherToMesh = (forecastData) => {
+  const state = store.getState();
+  const myName = state.auth.displayName;
+
+  broadcastToMesh({
+    type: 'WEATHER_SHARE',
+    payload: {
+      packetId: `weather_${myName}_${Date.now()}`,
+      originalSender: myName,
+      fromNode: myName,
+      forecastData: forecastData,
+      hasInternet: true,
+      ttl: 5 // Multi-hop up to 5 nodes
+    }
+  });
+  console.log(`🌍 BROADCASTING weather forecast to mesh network...`);
+};
+
+// Request weather data from nearby nodes (multi-hop)
+export const requestWeatherFromMesh = () => {
+  const state = store.getState();
+  const myName = state.auth.displayName;
+  const myLocation = state.radar.myLocation;
+
+  broadcastToMesh({
+    type: 'WEATHER_REQUEST',
+    payload: {
+      packetId: `weather_req_${myName}_${Date.now()}`,
+      originalSender: myName,
+      requesterId: myName,
+      lat: myLocation?.lat || 0,
+      lng: myLocation?.lng || 0,
+      ttl: 5 // Multi-hop up to 5 nodes
+    }
+  });
+  console.log(`📡 REQUESTING weather data from mesh network...`);
+};
+
 export const startMeshHeartbeat = () => {
   // 🛑 THE GHOST KILLER: Destroy any old background loops before starting a new one!
   if (heartbeatInterval) clearInterval(heartbeatInterval);
@@ -302,6 +394,27 @@ export const startMeshHeartbeat = () => {
           originalSender: myName
         }
       });
+
+      // --- PERIODIC WEATHER BROADCAST (every 2 heartbeats = 10 seconds) ---
+      const weatherData = state.weather.forecastData;
+      const hasInternet = state.weather.hasInternet;
+      
+      if (weatherData && hasInternet) {
+        // Only broadcast weather every other heartbeat to reduce network load
+        if (Math.random() > 0.5) {
+          broadcastToMesh({
+            type: 'WEATHER_SHARE',
+            payload: {
+              packetId: `weather_bcast_${myName}_${Date.now()}`,
+              originalSender: myName,
+              fromNode: myName,
+              forecastData: weatherData,
+              hasInternet: true,
+              ttl: 5
+            }
+          });
+        }
+      }
     }
   }, 5000); 
 };

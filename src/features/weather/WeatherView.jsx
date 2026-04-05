@@ -1,16 +1,67 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchWeather, setSelectedTime } from './weatherSlice';
+import { broadcastWeatherToMesh, requestWeatherFromMesh } from '../../services/webrtcClient';
+import { checkInternetViaWeatherAPI } from '../../utils/internetCheck';
 
 export default function WeatherView() {
   const dispatch = useDispatch();
-  const { forecastData, currentTimeWeather, selectedTime, loading, error } = useSelector((state) => state.weather);
+  const { forecastData, currentTimeWeather, selectedTime, loading, error, source, hasInternet } = useSelector((state) => state.weather);
   const myLocation = useSelector((state) => state.radar.myLocation);
+  const nearbyNodes = useSelector((state) => state.radar.nearbyNodes);
 
   useEffect(() => {
-    if (myLocation) {
-      dispatch(fetchWeather({ lat: myLocation.lat, lng: myLocation.lng }));
-    }
+    if (!myLocation) return;
+
+    const initializeWeather = async () => {
+      try {
+        // Check if we have internet
+        const hasConnection = await checkInternetViaWeatherAPI();
+
+        if (hasConnection) {
+          // We have internet - fetch directly
+          console.log('🌐 Internet available - fetching weather...');
+          dispatch(fetchWeather({ lat: myLocation.lat, lng: myLocation.lng }));
+
+          // Also broadcast to mesh if we fetched successfully
+          setTimeout(() => {
+            const state = useSelector((state) => state);
+            if (state.weather.forecastData) {
+              broadcastWeatherToMesh(state.weather.forecastData);
+            }
+          }, 1000);
+        } else {
+          // No internet - request from mesh
+          console.log('📡 No internet - requesting weather from mesh...');
+          requestWeatherFromMesh();
+
+          // Also try cached fallback
+          const cached = localStorage.getItem('weatherForecastData');
+          if (cached) {
+            console.log('💾 Using cached weather data...');
+            try {
+              const cachedData = JSON.parse(cached);
+              dispatch({ type: 'weather/receiveWeatherFromMesh', payload: { forecastData: cachedData, fromNode: 'local_cache' } });
+            } catch (e) {
+              console.error('Failed to parse cached weather:', e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing weather:', err);
+        const cached = localStorage.getItem('weatherForecastData');
+        if (cached) {
+          try {
+            const cachedData = JSON.parse(cached);
+            dispatch({ type: 'weather/receiveWeatherFromMesh', payload: { forecastData: cachedData, fromNode: 'local_cache' } });
+          } catch (e) {
+            console.error('Failed to parse cached weather:', e);
+          }
+        }
+      }
+    };
+
+    initializeWeather();
   }, [myLocation, dispatch]);
 
   const getWeatherIcon = (iconCode) => {
@@ -27,6 +78,13 @@ export default function WeatherView() {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  const getSourceBadge = () => {
+    if (source === 'local') return '🌐 Direct Fetch';
+    if (source === 'mesh') return '📡 From Mesh';
+    if (source === 'cache') return '💾 Cached';
+    return '❓ Unknown';
+  };
+
   // Get weather for selected time
   const selectedWeather = forecastData?.list?.find((item) => item.dt === selectedTime) || currentTimeWeather;
 
@@ -35,15 +93,21 @@ export default function WeatherView() {
       <div className="flex flex-col items-center justify-center h-full text-gray-400">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
         <p className="mt-2 text-sm">Fetching forecast...</p>
+        <p className="text-xs text-gray-500 mt-1">Checking internet & mesh network...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !selectedWeather) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-400">
-        <p className="text-sm">Forecast unavailable</p>
-        <p className="text-xs text-gray-500 mt-1">{error}</p>
+      <div className="flex flex-col items-center justify-center h-full text-gray-400 p-4">
+        <p className="text-sm font-semibold mb-2">⚠️ Forecast Unavailable</p>
+        <p className="text-xs text-gray-500 text-center">{error}</p>
+        <p className="text-xs text-gray-600 mt-2">
+          • No internet connection
+          • No nearby nodes with weather data
+          • No cached forecast available
+        </p>
       </div>
     );
   }
@@ -51,7 +115,8 @@ export default function WeatherView() {
   if (!forecastData || !selectedWeather) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-400">
-        <p className="text-sm">No forecast data</p>
+        <p className="text-sm">Searching for weather...</p>
+        <p className="text-xs text-gray-500 mt-2">Checking mesh nodes...</p>
       </div>
     );
   }
@@ -61,6 +126,19 @@ export default function WeatherView() {
       <h1 className="text-2xl font-bold text-white mb-4 tracking-wider">
         WEATHER<span className="text-emerald-500"> FORECAST</span>
       </h1>
+
+      {/* --- SOURCE BADGE --- */}
+      <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 px-3 py-1 bg-emerald-900/20 border border-emerald-900/40 rounded-full inline-block mx-auto">
+        {getSourceBadge()}
+      </div>
+
+      {/* --- MESH STATUS --- */}
+      {!hasInternet && nearbyNodes && nearbyNodes.length > 0 && (
+        <div className="bg-blue-900/20 border border-blue-900/40 rounded-lg p-3 mb-4 text-xs">
+          <p className="text-blue-300">🌐 Nearby Mesh Nodes: <span className="font-bold">{nearbyNodes.length}</span></p>
+          <p className="text-gray-400 text-[10px] mt-1">Searching for weather data across network...</p>
+        </div>
+      )}
 
       {/* --- CURRENT/SELECTED WEATHER --- */}
       <div className="bg-gray-900/50 border border-emerald-900/40 rounded-xl p-6 w-full mb-6">

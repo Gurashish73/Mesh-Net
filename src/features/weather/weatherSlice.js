@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { checkInternetViaWeatherAPI } from '../../utils/internetCheck';
 
 // Async thunk to fetch full day hourly forecast data
 export const fetchWeather = createAsyncThunk(
@@ -43,6 +44,19 @@ export const fetchWeather = createAsyncThunk(
   }
 );
 
+// Async thunk to check internet and attempt to fetch weather
+export const checkInternetAndFetch = createAsyncThunk(
+  'weather/checkInternetAndFetch',
+  async ({ lat, lng }, { rejectWithValue }) => {
+    try {
+      const hasInternet = await checkInternetViaWeatherAPI();
+      return { hasInternet, lat, lng };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const weatherSlice = createSlice({
   name: 'weather',
   initialState: {
@@ -52,6 +66,9 @@ const weatherSlice = createSlice({
     loading: false,
     error: null,
     lastFetchTime: null,
+    hasInternet: false, // Track if this node has internet
+    meshWeatherProviders: [], // Nearby nodes with internet/weather
+    source: 'local', // 'local' = direct fetch, 'mesh' = from nearby node, 'cache' = offline
   },
   reducers: {
     clearWeather: (state) => {
@@ -65,6 +82,34 @@ const weatherSlice = createSlice({
     updateCurrentWeather: (state, action) => {
       state.currentTimeWeather = action.payload;
     },
+    setHasInternet: (state, action) => {
+      state.hasInternet = action.payload;
+    },
+    // Called when receiving weather from mesh
+    receiveWeatherFromMesh: (state, action) => {
+      const { forecastData, fromNode } = action.payload;
+      state.forecastData = forecastData;
+      state.source = 'mesh';
+      state.lastFetchTime = Date.now();
+      
+      if (forecastData && forecastData.list) {
+        const now = Date.now();
+        const closestForecast = forecastData.list.reduce((prev, current) => {
+          const prevTime = Math.abs(prev.dt * 1000 - now);
+          const currentTime = Math.abs(current.dt * 1000 - now);
+          return currentTime < prevTime ? current : prev;
+        });
+        state.currentTimeWeather = closestForecast;
+        state.selectedTime = closestForecast.dt;
+      }
+    },
+    // Called to track which nodes have internet/weather
+    updateMeshWeatherProviders: (state, action) => {
+      state.meshWeatherProviders = action.payload;
+    },
+    setWeatherSource: (state, action) => {
+      state.source = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -76,6 +121,8 @@ const weatherSlice = createSlice({
         state.loading = false;
         state.forecastData = action.payload;
         state.lastFetchTime = Date.now();
+        state.source = 'local';
+        state.hasInternet = true;
         
         // Auto-select weather for current time
         if (action.payload && action.payload.list) {
@@ -92,9 +139,29 @@ const weatherSlice = createSlice({
       .addCase(fetchWeather.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.hasInternet = false;
+        state.source = 'cache';
+      })
+      .addCase(checkInternetAndFetch.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(checkInternetAndFetch.fulfilled, (state, action) => {
+        state.loading = false;
+        state.hasInternet = action.payload.hasInternet;
+      })
+      .addCase(checkInternetAndFetch.rejected, (state) => {
+        state.hasInternet = false;
       });
   },
 });
 
-export const { clearWeather, setSelectedTime, updateCurrentWeather } = weatherSlice.actions;
+export const { 
+  clearWeather, 
+  setSelectedTime, 
+  updateCurrentWeather, 
+  setHasInternet,
+  receiveWeatherFromMesh,
+  updateMeshWeatherProviders,
+  setWeatherSource
+} = weatherSlice.actions;
 export default weatherSlice.reducer;
