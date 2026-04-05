@@ -21,18 +21,20 @@ export default function CommsBoard() {
     activeTab === 'general' ? msg.type === 'GENERAL' : msg.type === 'SOS'
   );
 
-  
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
-    // Standard text message
+    // --- MULTI-HOP PACKET STRUCTURE ---
     const newMessage = {
-      id: `msg_${Date.now()}`,
+      id: `msg_${currentUser || 'Me'}_${Date.now()}`,
       senderId: currentUser || 'Me', 
       senderName: currentUser || 'Me',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: inputText
+      text: inputText,
+      ttl: 3, 
+      originalSender: currentUser || 'Me',
+      location: myLocation 
     };
 
     // 1. Save locally to UI Redux
@@ -52,7 +54,6 @@ export default function CommsBoard() {
     setInputText(''); 
   };
 
-
   // HANDLE REAL FILE SELECTION
   const handleImageSelection = (e) => {
     const file = e.target.files[0];
@@ -62,39 +63,31 @@ export default function CommsBoard() {
     img.src = URL.createObjectURL(file);
     
     img.onload = () => {
-      // 1. Create an invisible Canvas
       const canvas = document.createElement('canvas');
-      
-      // 2. Shrink it! Maximum width of 400px for the Mesh Network
       const MAX_WIDTH = 400; 
       const scaleSize = MAX_WIDTH / img.width;
       canvas.width = MAX_WIDTH;
       canvas.height = img.height * scaleSize;
 
-      // 3. Draw the shrunken image
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // 4. Compress it into a lightweight JPEG (0.5 quality)
       const compressedBase64String = canvas.toDataURL('image/jpeg', 0.5);
 
-      // 5. Send it to the transfer theater!
       simulateNetworkTransfer(compressedBase64String, file.name);
     };
     
-    // Reset the input so you can upload the same file again if you want
     e.target.value = ''; 
   };
 
-  //2. THE FILE TRANSFER THEATER ---
+  // 2. THE FILE TRANSFER THEATER ---
   const simulateNetworkTransfer = (base64ImageString, fileName) => {
     setIsTransferring(true);
     setTransferProgress(0);
     
-    // Simulate packet chunking over the Mesh Network
     let progress = 0;
     const interval = setInterval(() => {
-      progress += 25; // Goes up by 25% every 400ms
+      progress += 25; 
       setTransferProgress(progress);
       
       if (progress >= 100) {
@@ -102,22 +95,22 @@ export default function CommsBoard() {
         setTimeout(() => {
           setIsTransferring(false);
           
-          // 1. Build the payload
           const imageMessage = {
-            id: Date.now().toString(),
+            id: `img_${currentUser || 'Me'}_${Date.now()}`,
             senderId: currentUser || 'Me',
             senderName: currentUser || 'Me',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             text: `Sent image: ${fileName}`,
-            imageUrl: base64ImageString, // <-- Drops the real Base64 image here!
+            imageUrl: base64ImageString, 
             type: activeTab === 'general' ? 'GENERAL' : 'SOS',
-            status: 'Delivered'
+            status: 'Delivered',
+            ttl: 3, 
+            originalSender: currentUser || 'Me',
+            location: myLocation 
           };
 
-          // 2. Drop the REAL image into your local chat
           dispatch(addMessage(imageMessage));
 
-          // 3. BLAST IT TO THE MESH!
           broadcastToMesh({
             type: activeTab === 'general' ? 'GENERAL' : 'SOS',
             payload: imageMessage
@@ -129,7 +122,7 @@ export default function CommsBoard() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full relative">
       <h1 className="text-center text-sm font-bold tracking-widest mt-6 mb-4 text-gray-200">
         COMMUNICATIONS
       </h1>
@@ -185,8 +178,9 @@ export default function CommsBoard() {
              <p className={`text-sm mt-1 wrap-break-word ${msg.type === 'SOS' ? 'font-bold text-red-100' : 'text-gray-300'}`}>
                {msg.text}
              </p>
-             {/* --- RENDER GPS COORDINATES IF THEY EXIST --- */}
-             {msg.location && (
+
+             {/* 👇 FIXED: ONLY RENDER GPS COORDINATES IF IT'S AN SOS ALERT 👇 */}
+             {msg.location && msg.type === 'SOS' && (
                <div className="mt-2 flex items-center gap-1.5 bg-black/40 p-2 rounded flex-wrap border border-red-900/30 text-red-400 font-mono text-[10px]">
                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                  <span>LAT: {msg.location.lat.toFixed(5)}</span>
@@ -194,7 +188,14 @@ export default function CommsBoard() {
                  <span>LNG: {msg.location.lng.toFixed(5)}</span>
                </div>
              )}
-             
+
+             {/* THE MESH HOP VISUAL PROOF (Added back so you don't lose it!) */}
+             {msg.isHopped && (
+               <div className="mt-2 flex items-center gap-1.5 bg-orange-900/20 p-1.5 rounded border border-orange-500/30 text-orange-400 font-bold text-[10px]">
+                 <svg className="w-3 h-3 shrink-0 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                 MESH HOP: Routed via {msg.viaNode}
+               </div>
+             )}
              
              <div className={`flex justify-between mt-2 text-[10px] ${msg.type === 'SOS' ? 'text-red-500/70' : 'text-emerald-600/70'}`}>
                 <span>{msg.type === 'SOS' ? 'Status:' : 'Sent'}</span>
@@ -226,7 +227,6 @@ export default function CommsBoard() {
       <div className="px-4 pb-4 shrink-0 bg-[#0A110D] pt-2">
         <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
           
-          {/* REAL FILE ATTACHMENT LABEL */}
           <label 
             className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center cursor-pointer transition-colors border ${
               isTransferring 
@@ -234,7 +234,6 @@ export default function CommsBoard() {
                 : 'bg-[#0a0a0a] border-gray-700 text-gray-400 hover:text-emerald-400 hover:border-emerald-500'
             }`}
           >
-            {/* The hidden actual file input */}
             <input 
               type="file" 
               accept="image/*" 
@@ -242,13 +241,11 @@ export default function CommsBoard() {
               onChange={handleImageSelection}
               disabled={isTransferring}
             />
-            {/* Paperclip SVG */}
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
             </svg>
           </label>
           
-          {/* Text Input */}
           <div className="relative flex-1">
             <input 
               type="text" 

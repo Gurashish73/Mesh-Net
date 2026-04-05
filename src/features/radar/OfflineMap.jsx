@@ -18,8 +18,8 @@ export default function OfflineMap() {
   // Fallback to New Delhi if GPS is completely dead
   const center = myLocation ? [myLocation.lat, myLocation.lng] : [28.6139, 77.2090];
   
-  // Point this to the IP address where your Node server is running!
-  const TILE_SERVER_URL = "http://10.200.121.47:3001/maps/{z}/{x}/{y}.png";
+  // 👇 FIXED: Dynamic Tile URL based on current network IP!
+  const TILE_SERVER_URL = `http://${window.location.hostname}:3001/maps/{z}/{x}/{y}.png`;
 
   return (
     <div className="w-full h-full rounded-xl overflow-hidden border border-emerald-900/50 relative z-0">
@@ -29,10 +29,13 @@ export default function OfflineMap() {
         style={{ height: "100%", width: "100%", backgroundColor: '#0a0a0a' }}
         zoomControl={false}
       >
-        {/* OFFLINE TILE LAYER */}
+        {/* 👇 UPGRADED OFFLINE TILE LAYER 👇 */}
         <TileLayer
           url={TILE_SERVER_URL}
           attribution='MeshNet Offline Tactical Grid'
+          maxZoom={18} // Ensures it doesn't try to zoom past your scraped tiles
+          // The line below fills in missing tiles with a blank transparent box instead of broken UI icons
+          errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" 
         />
 
         {/* 1. Plot YOU */}
