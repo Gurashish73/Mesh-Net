@@ -179,7 +179,7 @@ export default function CommsBoard() {
                {msg.text}
              </p>
 
-             {/* 👇 FIXED: ONLY RENDER GPS COORDINATES IF IT'S AN SOS ALERT 👇 */}
+             {/* ONLY RENDER GPS COORDINATES IF IT'S AN SOS ALERT */}
              {msg.location && msg.type === 'SOS' && (
                <div className="mt-2 flex items-center gap-1.5 bg-black/40 p-2 rounded flex-wrap border border-red-900/30 text-red-400 font-mono text-[10px]">
                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>

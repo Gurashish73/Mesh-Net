@@ -9,10 +9,9 @@ let socket = null;
 const peers = {}; 
 const dataChannels = {}; 
 
-// 🛑 THE GHOST KILLER VARIABLE
 let heartbeatInterval = null;
 
-// --- LOCAL MEMORY BANK TO PREVENT NETWORK CRASHES ---
+//LOCAL MEMORY BANK TO PREVENT NETWORK CRASHES
 const seenPackets = new Set();
 
 const rtcConfig = {
@@ -26,31 +25,31 @@ export const handleIncomingMeshPacket = (rawJsonString) => {
     const envelope = JSON.parse(rawJsonString);
     if (!envelope.immediateSenderLocation) return; 
 
-    // 👇 We unpack the immediateSenderName to see who physically handed us the packet
+    // We unpack the immediateSenderName to see who physically handed us the packet
     const { immediateSenderLocation, immediateSenderName, data: packet } = envelope;
 
     const currentStore = store.getState();
     const myLocation = currentStore.radar.myLocation;
     const myName = currentStore.auth.displayName;
 
-    // 🛑 1. THE RADIO RANGE GATEKEEPER
+    // THE RADIO RANGE GATEKEEPER
     if (myLocation && immediateSenderLocation) {
        const dist = calculateDistance(myLocation.lat, myLocation.lng, immediateSenderLocation.lat, immediateSenderLocation.lng);
        if (dist > MAX_RADIO_RANGE) return; // Silently drop out-of-range signals
     }
 
-    // 🛡️ 2. INFINITE ECHO SHIELD
+    //INFINITE ECHO SHIELD
     const uniquePacketId = packet.payload.packetId || packet.payload.id;
     if (uniquePacketId) {
         if (seenPackets.has(uniquePacketId)) return;
         seenPackets.add(uniquePacketId);
     }
 
-    // 🕵️‍♂️ 3. CHECK IF THIS IS A HOPPED PACKET!
+    //CHECK IF THIS IS A HOPPED PACKET!
     // If the node who handed this to me is not the original author, it was routed!
     const isHopped = packet.payload.originalSender !== immediateSenderName;
 
-    // 4. PROCESS THE DATA
+    //PROCESS THE DATA
     switch (packet.type) {
       case 'GENERAL':
       case 'SOS': {
@@ -149,7 +148,7 @@ export const handleIncomingMeshPacket = (rawJsonString) => {
         
         store.dispatch(setNearbyNodes(updatedNodes));
 
-        // --- RADAR MULTI-HOP! ---
+        //RADAR MULTI-HOP
         if (packet.payload.ttl > 1 && packet.payload.originalSender !== myName) {
             const hoppedPacket = {
               ...packet,
@@ -240,7 +239,7 @@ export const broadcastToMesh = (packetObject) => {
   // Grab my own name to stamp on the envelope
   const myName = state.auth.displayName; 
 
-  // 🛑 THE SELF-ECHO SHIELD 🛑
+  //THE SELF-ECHO SHIELD
   const uniqueId = packetObject.payload?.packetId || packetObject.payload?.id;
   if (uniqueId) {
     seenPackets.add(uniqueId);
@@ -265,7 +264,7 @@ export const broadcastToMesh = (packetObject) => {
 };
 
 export const startMeshHeartbeat = () => {
-  // 🛑 THE GHOST KILLER: Destroy any old background loops before starting a new one!
+  //THE GHOST KILLER: Destroy any old background loops before starting a new one!
   if (heartbeatInterval) clearInterval(heartbeatInterval);
 
   heartbeatInterval = setInterval(() => {
@@ -274,11 +273,10 @@ export const startMeshHeartbeat = () => {
     const myRole = state.auth.role;
     const myName = state.auth.displayName;
 
-    // --- FAST SWEEPER ACTIVATED ---
+    //SWEEPER
     const currentNodes = state.radar.nearbyNodes || [];
     if (currentNodes.length > 0) {
         const now = Date.now();
-        // SWEEPER REDUCED TO 15 SECONDS FOR FAST UI UPDATES
         const aliveNodes = currentNodes.filter(n => n.lastPing && (now - n.lastPing < 15000));
         
         if (aliveNodes.length !== currentNodes.length) {

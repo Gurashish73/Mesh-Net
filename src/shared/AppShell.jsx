@@ -44,7 +44,7 @@ export default function AppShell() {
       }
   }
 
-  // --- FIXED: GLOBAL BACKGROUND GPS TRACKER ---
+  //GLOBAL BACKGROUND GPS TRACKER
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -60,7 +60,7 @@ export default function AppShell() {
     );
   }, [dispatch]);
 
-  // 👇 THE MISSING MULTI-HOP ENGINES INTEGRATED HERE 👇
+  //MULTI-HOP ENGINES INTEGRATION
   const handleGlobalSOS = () => {
     triggerSosVibration();
 
@@ -97,8 +97,8 @@ export default function AppShell() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* 👇 THE NEW "CENTRAL ROUTER" BADGE 👇 */}
-          {/* Now it ONLY lights up if we are actually bridging a gap! */}
+          {/* THE NEW "CENTRAL ROUTER" BADGE */}
+          {/* lights up if we are actually bridging a gap */}
           {isActivelyRouting && (
             <div className="flex items-center gap-1 bg-orange-900/30 px-2 py-1 rounded border border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.3)]">
               <svg className="w-3 h-3 text-orange-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
