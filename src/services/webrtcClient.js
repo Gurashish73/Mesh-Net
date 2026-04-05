@@ -131,7 +131,7 @@ export const initMeshNetwork = (signalingServerUrl, userProfile) => {
     const dataChannel = peerConnection.createDataChannel('mesh-chat');
     setupDataChannel(dataChannel, newUserId);
 
-    // Create the WebRTC Offer
+    // Create the WebRTC Offerj
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     socket.emit('offer', { target: newUserId, caller: socket.id, sdp: offer });

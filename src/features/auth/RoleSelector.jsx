@@ -28,7 +28,7 @@ export default function RoleSelector() {
     dispatch(setRole(selected));
     
     // START THE MESH NETWORK! 
-    initMeshNetwork('http://10.200.121.47:3001', { role: selected });
+    initMeshNetwork('http://192.168.1.14:3001', { role: selected });
     
     // START THE RADAR PING!
     setTimeout(() => {
