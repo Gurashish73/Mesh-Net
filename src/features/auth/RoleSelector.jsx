@@ -29,7 +29,7 @@ export default function RoleSelector() {
     
     // START THE MESH NETWORK! 
     // This automatically grabs whatever IP or localhost you are currently using!
-    const serverUrl = `http://${window.location.hostname}:3001`;
+    const serverUrl = `https://ten-hounds-allow.loca.l`;
     initMeshNetwork(serverUrl, { role: selected });
     
     // START THE RADAR PING!
